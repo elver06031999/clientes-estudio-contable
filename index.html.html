@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión Contable de Clientes</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- XLSX Library for Exporting to Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        .regimen-NRUS { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .regimen-RER { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .regimen-MYPE { background-color: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }
+        .regimen-RG { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen flex flex-col">
+
+    <div id="pantallaLogin" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center relative overflow-hidden border border-gray-100">
+            <div class="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white py-6 px-8 -mt-8 -mx-8 mb-6">
+                <div class="inline-flex p-3 bg-white/10 rounded-full mb-2">
+                    <i class="fa-solid fa-user-shield text-3xl text-blue-300"></i>
+                </div>
+                <h2 class="text-2xl font-bold">Estudio Contable</h2>
+                <p class="text-blue-200 text-xs mt-1">Gestión Privada de Clientes & Credenciales</p>
+            </div>
+
+            <form onsubmit="autenticar(event)" class="space-y-4">
+                <div>
+                    <label class="block text-left text-xs font-semibold text-gray-600 mb-1">PIN o Clave de Acceso</label>
+                    <div class="relative">
+                        <input type="password" id="pinInput" placeholder="Ingrese su PIN (Defecto: 1234)" required class="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none transition">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
+                            <i class="fa-solid fa-lock"></i>
+                        </span>
+                        <button type="button" onclick="togglePinVisibility('pinInput')" class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600">
+                            <i class="fa-solid fa-eye" id="eyeIcon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="loginError" class="text-red-500 text-xs text-left hidden font-medium flex items-center gap-1">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span>Clave incorrecta. Por favor intente de nuevo.</span>
+                </div>
+
+                <div class="text-xs text-left bg-blue-50/80 p-3 rounded-xl border border-blue-100 text-blue-900 flex items-start gap-2">
+                    <i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i>
+                    <div>
+                        <strong>Clave inicial:</strong> 1234<br>
+                        <span class="text-blue-700/80">Podrá actualizar su clave de acceso dentro del panel principal.</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-900 hover:bg-blue-800 text-white font-semibold py-3 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2">
+                    <span>Ingresar al Sistema</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="appContainer" class="hidden flex-col min-h-screen">
+        <!-- Toast Notification Container -->
+        <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-3 hidden border border-slate-700">
+            <i class="fa-solid fa-circle-check text-green-400"></i>
+            <span id="toastMsg" class="text-xs font-medium">Notificación</span>
+        </div>
+
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white shadow-xl sticky top-0 z-40 border-b border-blue-800/40">
+            <div class="max-w-7xl mx-auto px-4 py-3.5 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-blue-600/30 p-2.5 rounded-xl border border-blue-400/30">
+                        <i class="fa-solid fa-calculator text-2xl text-blue-300"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold tracking-tight">Panel Contable de Clientes</h1>
+                        <p class="text-xs text-blue-200/80">Control de RUCs, Credenciales SUNAT, AFP NET y Planilla</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2 w-full md:w-auto justify-end flex-wrap gap-y-2">
+                    <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center space-x-2 shadow-md">
+                        <i class="fa-solid fa-file-excel text-sm"></i>
+                        <span>Exportar Excel</span>
+                    </button>
+
+                    <button onclick="abrirModalCliente()" class="bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center space-x-2 shadow-md">
+                        <i class="fa-solid fa-plus text-sm"></i>
+                        <span>Nuevo Cliente</span>
+                    </button>
+
+                    <button onclick="abrirModalClave()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-xl text-xs transition border border-slate-700" title="Cambiar Contraseña">
+                        <i class="fa-solid fa-key"></i>
+                    </button>
+
+                    <button onclick="cerrarSesion()" class="bg-red-600/80 hover:bg-red-600 text-white p-2 rounded-xl text-xs transition" title="Cerrar Sesión">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
+            
+            <!-- Filter & Regime Legend Bar -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 mb-6 space-y-4">
+                <div class="flex flex-col lg:flex-row justify-between items-center gap-4">
+                    <!-- Search Input -->
+                    <div class="w-full lg:w-1/3 relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </span>
+                        <input type="text" id="buscador" onkeyup="filtrarClientes()" placeholder="Buscar por RUC, Razón Social o Teléfono..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs sm:text-sm">
+                    </div>
+
+                    <!-- Filter buttons per Regime -->
+                    <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end text-xs">
+                        <span class="text-gray-500 font-medium mr-1 hidden sm:inline">Filtrar por Régimen:</span>
+                        <button onclick="filtrarPorRegimen('TODOS')" class="px-3 py-1.5 rounded-lg border border-gray-300 bg-gray-100 hover:bg-gray-200 font-semibold transition">Todos</button>
+                        <button onclick="filtrarPorRegimen('NRUS')" class="px-3 py-1.5 rounded-lg regimen-NRUS font-semibold shadow-sm transition">NRUS</button>
+                        <button onclick="filtrarPorRegimen('RER')" class="px-3 py-1.5 rounded-lg regimen-RER font-semibold shadow-sm transition">RER</button>
+                        <button onclick="filtrarPorRegimen('MYPE')" class="px-3 py-1.5 rounded-lg regimen-MYPE font-semibold shadow-sm transition">MYPE</button>
+                        <button onclick="filtrarPorRegimen('RG')" class="px-3 py-1.5 rounded-lg regimen-RG font-semibold shadow-sm transition">RG</button>
+                    </div>
+                </div>
+
+                <!-- Color legend & counter -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-3 border-t border-gray-100 text-xs text-gray-500 gap-2">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span class="font-medium">Leyenda de Colores:</span>
+                        <span class="inline-flex items-center gap-1 font-semibold text-emerald-800"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> NRUS</span>
+                        <span class="inline-flex items-center gap-1 font-semibold text-blue-800"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> RER</span>
+                        <span class="inline-flex items-center gap-1 font-semibold text-purple-800"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> MYPE</span>
+                        <span class="inline-flex items-center gap-1 font-semibold text-amber-800"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> RG</span>
+                    </div>
+                    <div class="font-semibold text-blue-900 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
+                        Total Registrados: <span id="contadorClientes" class="text-blue-700 font-bold">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white shadow-lg rounded-2xl border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-left">
+                        <thead class="bg-slate-900 text-white text-xs uppercase font-bold tracking-wider">
+                            <tr>
+                                <th class="px-4 py-4">Cliente / RUC</th>
+                                <th class="px-4 py-4">Régimen</th>
+                                <th class="px-4 py-4"><i class="fa-solid fa-key text-blue-400 mr-1"></i> SUNAT</th>
+                                <th class="px-4 py-4"><i class="fa-solid fa-users text-purple-400 mr-1"></i> AFP NET</th>
+                                <th class="px-4 py-4"><i class="fa-solid fa-landmark text-emerald-400 mr-1"></i> Banco Nación (Detracciones)</th>
+                                <th class="px-4 py-4"><i class="fa-solid fa-address-book text-amber-400 mr-1"></i> Contacto</th>
+                                <th class="px-4 py-4 text-center">Planilla</th>
+                                <th class="px-4 py-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaClientes" class="divide-y divide-gray-200 text-xs md:text-sm">
+                            <!-- Injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <footer class="bg-white border-t border-gray-200 py-4 text-center text-xs text-gray-500 mt-auto">
+            <p>Sistema de Gestión Contable Independiente &bull; Seguro y Confidencial</p>
+        </footer>
+    </div>
+
+    <div id="modalCliente" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl max-h-[92vh] overflow-y-auto border border-gray-100">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <h2 id="modalTitulo" class="text-base font-bold text-blue-950 flex items-center gap-2">
+                    <i class="fa-solid fa-user-pen text-blue-600"></i>
+                    <span>Registrar Nuevo Cliente</span>
+                </h2>
+                <button onclick="cerrarModalCliente()" class="text-gray-400 hover:text-red-600 transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <form id="formCliente" onsubmit="guardarCliente(event)">
+                <input type="hidden" id="indexCliente">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">RUC *</label>
+                        <input type="text" id="ruc" required maxlength="11" placeholder="Ej: 10123456789" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Razón Social / Cliente *</label>
+                        <input type="text" id="cliente" required placeholder="Nombre de la empresa o cliente" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Régimen Tributario *</label>
+                        <select id="regimen" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none font-semibold">
+                            <option value="NRUS" class="text-emerald-800 font-bold">🟢 NRUS - Nuevo RUS</option>
+                            <option value="RER" class="text-blue-800 font-bold">🔵 RER - Régimen Especial</option>
+                            <option value="MYPE" class="text-purple-800 font-bold">🟣 MYPE Tributario</option>
+                            <option value="RG" class="text-amber-800 font-bold">🟠 RG - Régimen General</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Trabajadores en Planilla</label>
+                        <select id="planilla" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none">
+                            <option value="No tiene">No tiene planilla</option>
+                            <option value="Si tiene planilla">Sí tiene planilla</option>
+                        </select>
+                    </div>
+
+                    <!-- Credenciales SUNAT -->
+                    <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100 col-span-1">
+                        <span class="block text-xs font-bold text-blue-900 mb-2 flex items-center gap-1.5">
+                            <i class="fa-solid fa-key text-blue-600"></i> SUNAT SOL
+                        </span>
+                        <input type="text" id="sunat_usu" placeholder="Usuario SOL" class="w-full border border-gray-300 rounded-lg p-2 text-xs mb-2">
+                        <input type="text" id="sunat_clave" placeholder="Clave SOL" class="w-full border border-gray-300 rounded-lg p-2 text-xs">
+                    </div>
+
+                    <!-- Credenciales AFP NET -->
+                    <div class="bg-purple-50/50 p-3 rounded-xl border border-purple-100 col-span-1">
+                        <span class="block text-xs font-bold text-purple-900 mb-2 flex items-center gap-1.5">
+                            <i class="fa-solid fa-users-gear text-purple-600"></i> AFP NET
+                        </span>
+                        <input type="text" id="afp_usu" placeholder="Usuario AFP" class="w-full border border-gray-300 rounded-lg p-2 text-xs mb-2">
+                        <input type="text" id="afp_clave" placeholder="Clave AFP" class="w-full border border-gray-300 rounded-lg p-2 text-xs">
+                    </div>
+
+                    <!-- Banco Nación / Detracciones -->
+                    <div class="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 col-span-1 md:col-span-2">
+                        <span class="block text-xs font-bold text-emerald-900 mb-2 flex items-center gap-1.5">
+                            <i class="fa-solid fa-piggy-bank text-emerald-600"></i> Banco de la Nación (Cuenta Detracción / Clave)
+                        </span>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input type="text" id="banco_cta" placeholder="N° Cuenta Detracción / DNI" class="w-full border border-gray-300 rounded-lg p-2 text-xs">
+                            <input type="text" id="banco_clave" placeholder="Clave Banco Nación" class="w-full border border-gray-300 rounded-lg p-2 text-xs">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Correo Electrónico</label>
+                        <input type="email" id="correo" placeholder="cliente@correo.com" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Teléfono / Celular</label>
+                        <input type="text" id="telefono" placeholder="987654321" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-2 border-t pt-4">
+                    <button type="button" onclick="cerrarModalCliente()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-xl font-medium text-xs transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-900 hover:bg-blue-800 text-white px-5 py-2 rounded-xl font-medium text-xs transition shadow-md">Guardar Cliente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modalClave" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <h2 class="text-sm font-bold text-blue-900"><i class="fa-solid fa-lock mr-2"></i> Cambiar PIN de Acceso</h2>
+                <button onclick="cerrarModalClave()" class="text-gray-400 hover:text-red-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <form onsubmit="guardarNuevaClave(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Nuevo PIN o Contraseña</label>
+                    <input type="password" id="nuevaClave" required placeholder="Ingrese nueva contraseña" class="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none">
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3 border-t">
+                    <button type="button" onclick="cerrarModalClave()" class="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-xl text-xs font-medium">Cancelar</button>
+                    <button type="submit" class="bg-blue-900 hover:bg-blue-800 text-white px-4 py-1.5 rounded-xl text-xs font-medium shadow-md">Actualizar PIN</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Data keys
+        const STORAGE_KEY_CLIENTES = 'app_contable_clientes_v2';
+        const STORAGE_KEY_PIN = 'app_contable_pin_v2';
+
+        // Initial State
+        let clientes = JSON.parse(localStorage.getItem(STORAGE_KEY_CLIENTES)) || [];
+        let pinCorrecto = localStorage.getItem(STORAGE_KEY_PIN) || '1234';
+        let filtroRegimenActual = 'TODOS';
+
+        // Toast Notification Helper
+        function mostrarToast(mensaje) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            toastMsg.innerText = mensaje;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Quick Copy to Clipboard Helper
+        function copiarTexto(texto, campo) {
+            if (!texto || texto === '-') {
+                mostrarToast('No hay dato para copiar.');
+                return;
+            }
+            const el = document.createElement('textarea');
+            el.value = texto;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            mostrarToast(`Copiado ${campo}: "${texto}"`);
+        }
+
+        // Auth handling
+        function autenticar(e) {
+            e.preventDefault();
+            const inputVal = document.getElementById('pinInput').value;
+            const errorDiv = document.getElementById('loginError');
+
+            if (inputVal === pinCorrecto) {
+                document.getElementById('pantallaLogin').classList.add('hidden');
+                document.getElementById('appContainer').classList.remove('hidden');
+                document.getElementById('appContainer').classList.add('flex');
+                errorDiv.classList.add('hidden');
+                document.getElementById('pinInput').value = '';
+                mostrarClientes();
+            } else {
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        function cerrarSesion() {
+            document.getElementById('appContainer').classList.add('hidden');
+            document.getElementById('appContainer').classList.remove('flex');
+            document.getElementById('pantallaLogin').classList.remove('hidden');
+        }
+
+        function togglePinVisibility(id) {
+            const input = document.getElementById(id);
+            const icon = document.getElementById('eyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
+        // Get Badge CSS class based on Tax Regime
+        function obtenerClaseRegimen(regimen) {
+            switch(regimen) {
+                case 'NRUS': return 'regimen-NRUS';
+                case 'RER': return 'regimen-RER';
+                case 'MYPE': return 'regimen-MYPE';
+                case 'RG': return 'regimen-RG';
+                default: return 'bg-gray-100 text-gray-800 border-gray-200';
+            }
+        }
+
+        function mostrarClientes() {
+            const tbody = document.getElementById('tablaClientes');
+            tbody.innerHTML = '';
+            
+            // Filter list by selected regime filter
+            const clientesFiltrados = filtroRegimenActual === 'TODOS' 
+                ? clientes 
+                : clientes.filter(c => c.regimen === filtroRegimenActual);
+
+            document.getElementById('contadorClientes').innerText = clientesFiltrados.length;
+
+            if (clientesFiltrados.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-12 text-gray-400">
+                            <i class="fa-solid fa-folder-open text-4xl mb-3 block text-gray-300"></i>
+                            No se encontraron clientes registrados. Presione <strong>"Nuevo Cliente"</strong> para agregar.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            clientesFiltrados.forEach((c, index) => {
+                const realIndex = clientes.indexOf(c);
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors border-b border-gray-100";
+                
+                const claseRegimen = obtenerClaseRegimen(c.regimen);
+
+                tr.innerHTML = `
+                    <td class="px-4 py-3 border-r border-gray-50">
+                        <div class="font-bold text-gray-900">${c.cliente}</div>
+                        <div class="text-xs font-mono text-gray-500 flex items-center gap-1 mt-0.5">
+                            <span>RUC: ${c.ruc}</span>
+                            <button onclick="copiarTexto('${c.ruc}', 'RUC')" class="text-gray-400 hover:text-blue-600" title="Copiar RUC">
+                                <i class="fa-regular fa-copy text-[11px]"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2.5 py-1 rounded-lg text-xs font-bold shadow-xs ${claseRegimen}">
+                            ${c.regimen}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-xs border-r border-gray-50 space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span><span class="text-gray-400">Usu:</span> <strong>${c.sunat_usu || '-'}</strong></span>
+                            ${c.sunat_usu ? `<button onclick="copiarTexto('${c.sunat_usu}', 'Usuario SUNAT')" class="text-gray-400 hover:text-blue-600"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span><span class="text-gray-400">Clave:</span> <strong>${c.sunat_clave || '-'}</strong></span>
+                            ${c.sunat_clave ? `<button onclick="copiarTexto('${c.sunat_clave}', 'Clave SUNAT')" class="text-gray-400 hover:text-blue-600"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-xs border-r border-gray-50 space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span><span class="text-gray-400">Usu:</span> <strong>${c.afp_usu || '-'}</strong></span>
+                            ${c.afp_usu ? `<button onclick="copiarTexto('${c.afp_usu}', 'Usuario AFP')" class="text-gray-400 hover:text-purple-600"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span><span class="text-gray-400">Clave:</span> <strong>${c.afp_clave || '-'}</strong></span>
+                            ${c.afp_clave ? `<button onclick="copiarTexto('${c.afp_clave}', 'Clave AFP')" class="text-gray-400 hover:text-purple-600"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-xs border-r border-gray-50 space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span><span class="text-gray-400">Cta:</span> <strong>${c.banco_cta || '-'}</strong></span>
+                            ${c.banco_cta ? `<button onclick="copiarTexto('${c.banco_cta}', 'Cuenta Banco')" class="text-gray-400 hover:text-emerald-600"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span><span class="text-gray-400">Clave:</span> <strong>${c.banco_clave || '-'}</strong></span>
+                            ${c.banco_clave ? `<button onclick="copiarTexto('${c.banco_clave}', 'Clave Banco')" class="text-gray-400 hover:text-emerald-600"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-xs">
+                        <div class="text-gray-600"><i class="fa-regular fa-envelope text-gray-400 mr-1"></i>${c.correo || '-'}</div>
+                        <div class="text-gray-600 mt-0.5"><i class="fa-solid fa-phone text-gray-400 mr-1"></i>${c.telefono || '-'}</div>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-[11px] font-semibold ${c.planilla.includes('Si') ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-gray-100 text-gray-600'}">
+                            ${c.planilla}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center space-x-1">
+                        <button onclick="editarCliente(${realIndex})" class="p-1.5 text-blue-600 hover:text-blue-900 rounded-lg hover:bg-blue-100 transition" title="Editar">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="eliminarCliente(${realIndex})" class="p-1.5 text-red-600 hover:text-red-900 rounded-lg hover:bg-red-100 transition" title="Eliminar">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filtrarPorRegimen(regimen) {
+            filtroRegimenActual = regimen;
+            mostrarClientes();
+        }
+
+        // Modals
+        function abrirModalCliente() {
+            document.getElementById('modalTitulo').innerHTML = '<i class="fa-solid fa-user-plus text-blue-600"></i> Registrar Nuevo Cliente';
+            document.getElementById('formCliente').reset();
+            document.getElementById('indexCliente').value = "";
+            document.getElementById('modalCliente').classList.remove('hidden');
+        }
+
+        function cerrarModalCliente() {
+            document.getElementById('modalCliente').classList.add('hidden');
+        }
+
+        function abrirModalClave() {
+            document.getElementById('nuevaClave').value = '';
+            document.getElementById('modalClave').classList.remove('hidden');
+        }
+
+        function cerrarModalClave() {
+            document.getElementById('modalClave').classList.add('hidden');
+        }
+
+        // CRUD Actions
+        function guardarCliente(e) {
+            e.preventDefault();
+            const index = document.getElementById('indexCliente').value;
+            const nuevoCliente = {
+                ruc: document.getElementById('ruc').value.trim(),
+                cliente: document.getElementById('cliente').value.trim(),
+                regimen: document.getElementById('regimen').value,
+                planilla: document.getElementById('planilla').value,
+                sunat_usu: document.getElementById('sunat_usu').value.trim(),
+                sunat_clave: document.getElementById('sunat_clave').value.trim(),
+                afp_usu: document.getElementById('afp_usu').value.trim(),
+                afp_clave: document.getElementById('afp_clave').value.trim(),
+                banco_cta: document.getElementById('banco_cta').value.trim(),
+                banco_clave: document.getElementById('banco_clave').value.trim(),
+                correo: document.getElementById('correo').value.trim(),
+                telefono: document.getElementById('telefono').value.trim(),
+            };
+
+            if (index === "") {
+                clientes.push(nuevoCliente);
+                mostrarToast('Cliente guardado exitosamente.');
+            } else {
+                clientes[index] = nuevoCliente;
+                mostrarToast('Cliente actualizado exitosamente.');
+            }
+
+            localStorage.setItem(STORAGE_KEY_CLIENTES, JSON.stringify(clientes));
+            cerrarModalCliente();
+            mostrarClientes();
+        }
+
+        function editarCliente(index) {
+            const c = clientes[index];
+            document.getElementById('modalTitulo').innerHTML = '<i class="fa-solid fa-user-pen text-blue-600"></i> Editar Cliente';
+            document.getElementById('indexCliente').value = index;
+            document.getElementById('ruc').value = c.ruc;
+            document.getElementById('cliente').value = c.cliente;
+            document.getElementById('regimen').value = c.regimen;
+            document.getElementById('planilla').value = c.planilla;
+            document.getElementById('sunat_usu').value = c.sunat_usu;
+            document.getElementById('sunat_clave').value = c.sunat_clave;
+            document.getElementById('afp_usu').value = c.afp_usu;
+            document.getElementById('afp_clave').value = c.afp_clave;
+            document.getElementById('banco_cta').value = c.banco_cta;
+            document.getElementById('banco_clave').value = c.banco_clave;
+            document.getElementById('correo').value = c.correo;
+            document.getElementById('telefono').value = c.telefono;
+            document.getElementById('modalCliente').classList.remove('hidden');
+        }
+
+        function eliminarCliente(index) {
+            if (confirm(`¿Está seguro de eliminar a "${clientes[index].cliente}"? Esta acción no se puede revertir.`)) {
+                clientes.splice(index, 1);
+                localStorage.setItem(STORAGE_KEY_CLIENTES, JSON.stringify(clientes));
+                mostrarClientes();
+                mostrarToast('Cliente eliminado.');
+            }
+        }
+
+        function guardarNuevaClave(e) {
+            e.preventDefault();
+            const claveNueva = document.getElementById('nuevaClave').value.trim();
+            if (claveNueva.length < 4) {
+                alert("Por motivos de seguridad, la clave debe tener al menos 4 caracteres.");
+                return;
+            }
+            pinCorrecto = claveNueva;
+            localStorage.setItem(STORAGE_KEY_PIN, pinCorrecto);
+            mostrarToast("¡PIN de acceso actualizado!");
+            cerrarModalClave();
+        }
+
+        // Live text filter
+        function filtrarClientes() {
+            const filtro = document.getElementById('buscador').value.toLowerCase();
+            const filas = document.getElementById('tablaClientes').getElementsByTagName('tr');
+
+            for (let i = 0; i < filas.length; i++) {
+                const texto = filas[i].innerText.toLowerCase();
+                filas[i].style.display = texto.includes(filtro) ? "" : "none";
+            }
+        }
+
+        function exportarExcel() {
+            if (clientes.length === 0) {
+                alert("No hay clientes registrados para exportar.");
+                return;
+            }
+
+            const datosExcel = clientes.map((c, i) => ({
+                "N°": i + 1,
+                "RUC": c.ruc,
+                "Razón Social / Cliente": c.cliente,
+                "Régimen Tributario": c.regimen,
+                "Trabajadores en Planilla": c.planilla,
+                "Usuario SUNAT": c.sunat_usu,
+                "Clave SUNAT": c.sunat_clave,
+                "Usuario AFP NET": c.afp_usu,
+                "Clave AFP NET": c.afp_clave,
+                "Cuenta Detracción / Banco": c.banco_cta,
+                "Clave Banco": c.banco_clave,
+                "Correo Electrónico": c.correo,
+                "Teléfono": c.telefono
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(datosExcel);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Lista de Clientes");
+
+            const fecha = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(workbook, `Clientes_Estudio_Contable_${fecha}.xlsx`);
+            mostrarToast("¡Archivo Excel generado!");
+        }
+    </script>
+</body>
+</html>
